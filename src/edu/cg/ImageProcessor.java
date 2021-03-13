@@ -14,6 +14,7 @@ public class ImageProcessor extends FunctioalForEachLoops {
 	public final int workingImageType;
 	public final int outWidth;
 	public final int outHeight;
+	public final int MAX_COLOR_VALUE = 255;
 	
 	//MARK: Constructors
 	public ImageProcessor(Logger logger, BufferedImage workingImage,
@@ -87,12 +88,62 @@ public class ImageProcessor extends FunctioalForEachLoops {
 	//MARK: Unimplemented methods
 	public BufferedImage greyscale() {
 		//TODO: Implement this method, remove the exception.
-		throw new UnimplementedMethodException("greyscale");
+		logger.log("applies greyscale interpolation");
+		BufferedImage ans = newEmptyOutputSizedImage();
+
+		int r = rgbWeights.redWeight;
+		int g = rgbWeights.greenWeight;
+		int b = rgbWeights.blueWeight;
+		int sumWeights = rgbWeights.weightsSum;
+
+		pushForEachParameters();
+		setForEachOutputParameters();
+		forEach((y, x) -> {
+			Color c = new Color(workingImage.getRGB(x, y));
+			float red = r*c.getRed();
+			float green = g*c.getGreen();
+			float blue = b*c.getBlue();
+			int greyColor = (int)((red + green + blue)/sumWeights);
+			ans.setRGB(x, y,new Color(greyColor,greyColor,greyColor).getRGB());
+		});
+
+		logger.log("grey scaling completed");
+		return ans;
 	}
 
 	public BufferedImage gradientMagnitude() {
 		//TODO: Implement this method, remove the exception.
-		throw new UnimplementedMethodException("gradientMagnitude");
+		logger.log("applies gradient interpolation");
+		BufferedImage greyScaledImage = this.greyscale();
+		BufferedImage ans = newEmptyOutputSizedImage();
+		pushForEachParameters();
+		setForEachOutputParameters();
+
+		forEach((y, x) -> {
+			int diffVertical;
+			int diffHorizontal;
+
+			int greyColor = new Color(greyScaledImage.getRGB(x,y)).getRed();
+
+			if(x <  greyScaledImage.getWidth() - 1) {
+				diffHorizontal = greyColor - new Color(greyScaledImage.getRGB(x+1,y)).getRed();
+			}else{
+				diffHorizontal = greyColor - new Color(greyScaledImage.getRGB(x-1,y)).getRed();;
+			}
+
+			if(y <  greyScaledImage.getHeight() - 1) {
+				diffVertical = greyColor - new Color(greyScaledImage.getRGB(x,y+1)).getRed();
+			}else{
+				diffVertical = greyColor - new Color(greyScaledImage.getRGB(x,y-1)).getRed();
+			}
+
+			int color = MAX_COLOR_VALUE - (int)Math.sqrt((diffVertical*diffVertical + diffHorizontal*diffHorizontal)/2.0);
+			Color c = new Color(color,color,color);
+			ans.setRGB(x, y,c.getRGB());
+		});
+
+		logger.log("Gradient interpolation completed:");
+		return ans;
 	}
 
 	public BufferedImage bilinear() {
