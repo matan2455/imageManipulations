@@ -1,7 +1,8 @@
 package edu.cg;
 
-import java.awt.Color;
+import java.awt.*;
 import java.awt.image.BufferedImage;
+import java.nio.Buffer;
 
 public class ImageProcessor extends FunctioalForEachLoops {
 	
@@ -148,9 +149,35 @@ public class ImageProcessor extends FunctioalForEachLoops {
 
 	public BufferedImage bilinear() {
 		//TODO: Implement this method, remove the exception.
-		throw new UnimplementedMethodException("bilinear");
+		logger.log("applies resize with bilinear interpolation");
+
+		//create padded image - inspired by stack overflow - https://stackoverflow.com/questions/5836203/java-padding-image
+		BufferedImage paddedImage = new BufferedImage(workingImage.getWidth() + 2, workingImage.getHeight(), workingImage.getType());
+		Graphics graphics = paddedImage.getGraphics();
+		graphics.setColor(Color.white);
+		graphics.fillRect(0, 0, workingImage.getWidth() + 2 , workingImage.getHeight() +2);
+		graphics.drawImage(workingImage, 2, 2, null);
+		graphics.dispose();
+
+		BufferedImage ans = newEmptyOutputSizedImage();
+		pushForEachParameters();
+		setForEachOutputParameters();
+		double scaleX = (double)this.inWidth/(double)this.outWidth;
+		double scaleY = (double)this.inHeight/(double)this.outHeight;
+
+		forEach((y, x) -> {
+			NearestCells cells = new NearestCells(x*scaleX,y*scaleY,paddedImage);
+			NearestCells.Cell topInterpolation =  cells.interpolate(cells.q_11,cells.q_12,true);
+			NearestCells.Cell bottomInterpolation =  cells.interpolate(cells.q_21,cells.q_22,true);
+			NearestCells.Cell interpolationResult = cells.interpolate(topInterpolation,bottomInterpolation,false);
+			ans.setRGB(x,y,interpolationResult.color.getRGB());
+		});
+
+		return ans;
 	}
-	
+
+
+
 	//MARK: Utilities
 	public final void setForEachInputParameters() {
 		setForEachParameters(inWidth, inHeight);
@@ -180,5 +207,69 @@ public class ImageProcessor extends FunctioalForEachLoops {
 		);
 		
 		return output;
+	}
+
+	private class NearestCells {
+
+		Cell q_11;
+		Cell q_12;
+		Cell q_21;
+		Cell q_22;
+		double x_scaled;
+		double y_scaeld;
+		BufferedImage paddedImage;
+
+		public NearestCells(double x_scaled, double y_scaled,BufferedImage paddedImage){
+			this.paddedImage = paddedImage;
+			this.x_scaled = x_scaled;
+			this.y_scaeld = y_scaled;
+
+			int x_left = (int) Math.floor(this.x_scaled);
+			int x_right = (int) Math.ceil(this.x_scaled);
+			int y_bottom = (int)Math.floor(this.y_scaeld);
+			int y_top = (int)Math.ceil(this.y_scaeld);
+
+			this.q_11 = new Cell(x_left,y_top, new Color(paddedImage.getRGB(x_left,y_top)));
+			this.q_12 = new Cell(x_right,y_top, new Color(paddedImage.getRGB(x_right,y_top)));
+			this.q_21 = new Cell(x_left,y_bottom, new Color(paddedImage.getRGB(x_left,y_bottom)));
+			this.q_22 = new Cell(x_right,y_bottom, new Color(paddedImage.getRGB(x_right,y_bottom)));
+		}
+
+		public Cell interpolate(Cell cellOne,Cell cellTwo,boolean isHorizontal){
+
+			Cell approximatedCell = new Cell(x_scaled,y_scaeld,new Color(0));
+			double distFromCellOne = calcDistFromPoint(cellOne,approximatedCell,isHorizontal);
+			double distBetweenCells = calcDistFromPoint(cellOne,cellTwo,isHorizontal);
+			double t = distBetweenCells > 0? distFromCellOne/distBetweenCells:1.0;
+
+			int red = (int)(t*cellOne.color.getRed() + (1-t)*cellTwo.color.getRed());
+			int green = (int)(t*cellOne.color.getGreen() + (1-t)*cellTwo.color.getGreen());
+			int blue = (int)(t*cellOne.color.getBlue() + (1-t)*cellTwo.color.getBlue());
+
+			double weightedX = (cellOne.x_pos + cellTwo.x_pos)/2;
+			double weightedY = (cellOne.y_pos + cellTwo.y_pos)/2;
+
+			return new Cell(weightedX,weightedY,new Color(red,green,blue));
+		}
+		//convert to vertical or horizontal distance.
+		private double calcDistFromPoint(Cell CellOne,Cell cellTwo,boolean isHorizontal){
+			return isHorizontal? CellOne.x_pos - cellTwo.x_pos :  CellOne.y_pos- cellTwo.y_pos;
+		}
+
+		private class Cell{
+
+			double x_pos;
+			double y_pos;
+			Color color;
+
+			public Cell(double x_pos,double y_pos,Color color) {
+
+				this.x_pos = x_pos;
+				this.y_pos = y_pos;
+				this.color = color;
+			}
+		}
+
+
 	}
 }
