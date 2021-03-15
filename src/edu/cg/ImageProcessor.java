@@ -152,11 +152,11 @@ public class ImageProcessor extends FunctioalForEachLoops {
 		logger.log("applies resize with bilinear interpolation");
 
 		//create padded image - inspired by stack overflow - https://stackoverflow.com/questions/5836203/java-padding-image
-		BufferedImage paddedImage = new BufferedImage(workingImage.getWidth() + 2, workingImage.getHeight(), workingImage.getType());
+		BufferedImage paddedImage = new BufferedImage(workingImage.getWidth() + 2, workingImage.getHeight()+2, workingImage.getType());
 		Graphics graphics = paddedImage.getGraphics();
 		graphics.setColor(Color.white);
-		graphics.fillRect(0, 0, workingImage.getWidth() + 2 , workingImage.getHeight() +2);
-		graphics.drawImage(workingImage, 2, 2, null);
+		graphics.fillRect(0, 0, workingImage.getWidth() + 2 , workingImage.getHeight() + 2);
+		graphics.drawImage(workingImage, 1, 1, null);
 		graphics.dispose();
 
 		BufferedImage ans = newEmptyOutputSizedImage();
@@ -209,7 +209,7 @@ public class ImageProcessor extends FunctioalForEachLoops {
 		return output;
 	}
 
-	private class NearestCells {
+	private static class NearestCells {
 
 		Cell q_11;
 		Cell q_12;
@@ -220,6 +220,7 @@ public class ImageProcessor extends FunctioalForEachLoops {
 		BufferedImage paddedImage;
 
 		public NearestCells(double x_scaled, double y_scaled,BufferedImage paddedImage){
+
 			this.paddedImage = paddedImage;
 			this.x_scaled = x_scaled;
 			this.y_scaeld = y_scaled;
@@ -251,6 +252,7 @@ public class ImageProcessor extends FunctioalForEachLoops {
 
 			return new Cell(weightedX,weightedY,new Color(red,green,blue));
 		}
+
 		//convert to vertical or horizontal distance.
 		private double calcDistFromPoint(Cell CellOne,Cell cellTwo,boolean isHorizontal){
 			return isHorizontal? CellOne.x_pos - cellTwo.x_pos :  CellOne.y_pos- cellTwo.y_pos;
