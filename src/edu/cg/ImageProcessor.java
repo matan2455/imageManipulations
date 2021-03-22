@@ -111,8 +111,8 @@ public class ImageProcessor extends FunctioalForEachLoops {
 		pushForEachParameters();
 
 		forEach((y, x) -> {
-
-			Color c = getGradientMagnitude(greyScaledImage,x,y,false);
+			int magnitude = getGradientMagnitude(greyScaledImage,x,y,false);
+			Color c = new Color(magnitude,magnitude,magnitude);
 			ans.setRGB(x, y,c.getRGB());
 		});
 
@@ -199,7 +199,7 @@ public class ImageProcessor extends FunctioalForEachLoops {
 
 	}
 
-	public Color getGradientMagnitude(BufferedImage greyScaledImage,int x,int y,boolean isSeamCarve) {
+	public int getGradientMagnitude(BufferedImage greyScaledImage,int x,int y,boolean isSeamCarve) {
 		int diffVertical;
 		int diffHorizontal;
 
@@ -218,8 +218,8 @@ public class ImageProcessor extends FunctioalForEachLoops {
 		}
 
 		int squaredSum = diffVertical * diffVertical + diffHorizontal * diffHorizontal;
-		int color = isSeamCarve? (int) Math.sqrt(squaredSum):MAX_COLOR_VALUE - (int) Math.sqrt(squaredSum / 2.0);
-		return new Color(color, color, color);
+		int result = isSeamCarve? (int) Math.sqrt(squaredSum):MAX_COLOR_VALUE - (int) Math.sqrt(squaredSum / 2.0);
+		return result;
 	}
 
 	private static class NearestCells {

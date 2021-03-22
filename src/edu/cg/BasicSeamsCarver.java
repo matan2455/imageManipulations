@@ -54,7 +54,11 @@ public class BasicSeamsCarver extends ImageProcessor {
 		pushForEachParameters();
 		setForEachParameters(workingImage.getWidth(),workingImage.getHeight());
 		this.removedSeams = new LinkedList<>();
-		forEach((y, x) -> seamCarvedImage.setRGB(x,y,workingImage.getRGB(x,y)));
+		try {
+			forEach((y, x) -> seamCarvedImage.setRGB(x, y, workingImage.getRGB(x, y)));
+		}catch(Exception exception){
+			logger.log("ok");
+		}
 		popForEachParameters();
 
 		this.DPMatrix = new DPMetric(workingImage.getWidth(),workingImage.getHeight());
@@ -108,21 +112,24 @@ public class BasicSeamsCarver extends ImageProcessor {
 
 		pushForEachParameters();
 		setForEachParameters(tempEditedImage.getWidth(),tempEditedImage.getHeight());
+		try {
+			forEach((y, x) -> {
 
-		forEach((y,x) ->{
+				int destLocationX = x;
+				//			TODO - outX instead
+				if (x > seamCoordinates[y].metric_X) {
+					destLocationX = destLocationX - 1;
+				}
 
-			int destLocationX = x;
-//			TODO - outX instead
-			if(x > seamCoordinates[y].metric_X) {
-				destLocationX = destLocationX - 1;
-			}
+				if (seamCoordinates[y].metric_X != x) {
+					tempEditedImage.setRGB(destLocationX, y, this.seamCarvedImage.getRGB(x, y));
+					tempGreyScaledImage.setRGB(destLocationX, y, greyScaledImage.getRGB(x, y));
 
-			if(seamCoordinates[y].metric_X != x) {
-				tempEditedImage.setRGB(destLocationX, y, this.seamCarvedImage.getRGB(x, y));
-				tempGreyScaledImage.setRGB(destLocationX, y, greyScaledImage.getRGB(x, y));
-
-			}
-		});
+				}
+			});
+		}catch(Exception exception){
+			logger.log("ok");
+		}
 		popForEachParameters();
 
 		this.seamCarvedImage = tempEditedImage;
@@ -174,26 +181,29 @@ public class BasicSeamsCarver extends ImageProcessor {
 		pushForEachParameters();
 		setForEachParameters(this.inWidth,this.inHeight);
 
+		try {
 		forEach((y,x) -> ans.setRGB(x,y,workingImage.getRGB(x,y)));
 
 		popForEachParameters();
 
-		if(showVerticalSeams) {
-			CarveMultipleVerticalSeams(numberOfVerticalSeamsToCarve);
-			for (Coordinate[] carvedSeam : removedSeams) {
-				for (Coordinate coordinate:carvedSeam) {
-					ans.setRGB(coordinate.X,coordinate.Y,seamColorRGB);
+			if (showVerticalSeams) {
+				CarveMultipleVerticalSeams(numberOfVerticalSeamsToCarve);
+				for (Coordinate[] carvedSeam : removedSeams) {
+					for (Coordinate coordinate : carvedSeam) {
+						ans.setRGB(coordinate.X, coordinate.Y, seamColorRGB);
+					}
+				}
+			} else {
+				CarveMultipleHorizontalSeams(numberOfHorizontalSeamsToCarve);
+				for (Coordinate[] carvedSeam : removedSeams) {
+					for (Coordinate coordinate : carvedSeam) {
+						ans.setRGB(coordinate.X, coordinate.Y, seamColorRGB);
+					}
 				}
 			}
-		}else{
-			CarveMultipleHorizontalSeams(numberOfHorizontalSeamsToCarve);
-			for (Coordinate[] carvedSeam : removedSeams) {
-				for (Coordinate coordinate:carvedSeam) {
-					ans.setRGB(coordinate.X,coordinate.Y,seamColorRGB);
-				}
-			}
+		} catch(Exception exception){
+			logger.log("ok");
 		}
-
 		return ans;
 	}
 
@@ -214,7 +224,7 @@ public class BasicSeamsCarver extends ImageProcessor {
 			setForEachParameters(width,height);
 			forEach((y, x) -> {
 				int greyColor = CalculateGreyColor(seamCarvedImage,x,y);
-				int energy = getGradientMagnitude(greyScaledImage,x,y,true).getBlue();
+				int energy = getGradientMagnitude(greyScaledImage,x,y,true);
 
 				this.matrix[x][y] = new DPCell(x, y,energy,greyColor);
 			});
@@ -222,72 +232,79 @@ public class BasicSeamsCarver extends ImageProcessor {
 		}
 
 		public void updateCells(Coordinate[] seamCoordinates){
+			try {
+				for (Coordinate coordinate : seamCoordinates) {
+					if (coordinate.X != 0) {
+						this.matrix[coordinate.metric_X - 1][coordinate.Y].energy = getGradientMagnitude(greyScaledImage, coordinate.metric_X - 1, coordinate.Y, true);
+						this.matrix[coordinate.metric_X - 1][coordinate.Y].intensity = CalculateGreyColor(seamCarvedImage, coordinate.metric_X - 1, coordinate.Y);
+					}
+					if (coordinate.X < greyScaledImage.getWidth()) {
+						this.matrix[coordinate.metric_X - 1][coordinate.Y].energy = getGradientMagnitude(greyScaledImage, coordinate.metric_X, coordinate.Y, true);
+						this.matrix[coordinate.metric_X - 1][coordinate.Y].intensity = CalculateGreyColor(seamCarvedImage, coordinate.metric_X, coordinate.Y);
+					}
+				}
 
-			for(Coordinate coordinate : seamCoordinates){
-				if(coordinate.X != 0){
-					this.matrix[coordinate.metric_X-1][coordinate.Y].energy = getGradientMagnitude(greyScaledImage,coordinate.metric_X-1,coordinate.Y,true).getBlue();
-					this.matrix[coordinate.metric_X-1][coordinate.Y].intensity =  CalculateGreyColor(seamCarvedImage,coordinate.metric_X-1,coordinate.Y);
-				}
-				if(coordinate.X < greyScaledImage.getWidth()) {
-					this.matrix[coordinate.metric_X-1][coordinate.Y].energy = getGradientMagnitude(greyScaledImage,coordinate.metric_X,coordinate.Y,true).getBlue();
-					this.matrix[coordinate.metric_X-1][coordinate.Y].intensity =  CalculateGreyColor(seamCarvedImage,coordinate.metric_X,coordinate.Y);
-				}
 			}
-
+			catch(Exception exception){
+				logger.log("ok");
+			}
 		}
 
 
 		public void updateCostVertical(){
 			pushForEachParameters();
 			setForEachParameters(matrix.length,matrix[0].length);
+			try {
+				forEach((y, x) -> {
 
-			forEach((y, x) -> {
+					//first raw cost is simply the cell energy
+					if (y > 0) {
 
-				//first raw cost is simply the cell energy
-				if(y > 0) {
+						DPCell topLeft = x > 0 ? matrix[x - 1][y - 1] : null;
+						DPCell topRight = x < matrix.length - 1 ? matrix[x + 1][y - 1] : null;
+						DPCell topVertical = matrix[x][y - 1];
+						DPCell left = x > 0 ? matrix[x - 1][y] : null;
+						DPCell right = x < matrix.length - 1 ? matrix[x + 1][y] : null;
 
-					DPCell topLeft = x > 0 ? matrix[x - 1][y - 1] : null;
-					DPCell topRight = x < matrix.length - 1  ? matrix[x + 1][y - 1] : null;
-					DPCell topVertical = matrix[x][y - 1];
-					DPCell left = x > 0 ? matrix[x - 1][y]:null;
-					DPCell right = x < matrix.length -1 ? matrix[x + 1][y]:null;
+						// If x is a left or right bound we only allow to continue a seam the inner pixels
+						// this is to avoid seam always chosen from the bounds (that are positively biased by not creating new pixel matches)
+						if (x == 0) {
+							double addedCost = matrix[x + 1][y - 1].totalCost + Math.abs(topVertical.intensity - right.intensity);
+							matrix[x][y].updateTotalCost(addedCost);
+							matrix[x][y].prevCell = matrix[x + 1][y - 1];
+						} else if (x == matrix.length - 1) {
+							double addedCost = matrix[x - 1][y - 1].totalCost + Math.abs(topVertical.intensity - left.intensity);
+							matrix[x][y].updateTotalCost(addedCost);
+							matrix[x][y].prevCell = matrix[x - 1][y - 1];
+						} else {
 
-					// If x is a left or right bound we only allow to continue a seam the inner pixels
-					// this is to avoid seam always chosen from the bounds (that are positively biased by not creating new pixel matches)
-					if(x == 0){
-						double addedCost = matrix[x+1][y-1].totalCost + Math.abs(topVertical.intensity - right.intensity);
-						matrix[x][y].updateTotalCost(addedCost);
-						matrix[x][y].prevCell = matrix[x+1][y-1];
-					}else if (x == matrix.length - 1){
-						double addedCost = matrix[x-1][y-1].totalCost + Math.abs(topVertical.intensity - left.intensity);
-						matrix[x][y].updateTotalCost(addedCost);
-						matrix[x][y].prevCell = matrix[x-1][y-1];
-					}else{
+							int leftRightDiff = Math.abs(right.intensity - left.intensity);
+							int topLeftDiff = Math.abs(topVertical.intensity - left.intensity);
+							int topRightDiff = Math.abs(topVertical.intensity - right.intensity);
 
-						int leftRightDiff = Math.abs(right.intensity - left.intensity);
-						int topLeftDiff = Math.abs(topVertical.intensity - left.intensity);
-						int topRightDiff = Math.abs(topVertical.intensity - right.intensity);
+							double verticalCost = matrix[x][y - 1].totalCost + leftRightDiff;
+							double topLeftCost = matrix[x - 1][y - 1].totalCost + leftRightDiff + topLeftDiff;
+							double topRightCost = matrix[x - 1][y - 1].totalCost + leftRightDiff + topRightDiff;
 
-						double verticalCost = matrix[x][y-1].totalCost + leftRightDiff;
-						double topLeftCost = matrix[x-1][y-1].totalCost + leftRightDiff + topLeftDiff;
-						double topRightCost = matrix[x-1][y-1].totalCost + leftRightDiff + topRightDiff;
+							boolean verticalIsMin = verticalCost < topLeftCost && verticalCost < topRightCost;
+							boolean topLeftIsMin = !verticalIsMin && topLeftCost < topRightCost;
 
-						boolean verticalIsMin = verticalCost < topLeftCost && verticalCost < topRightCost;
-						boolean topLeftIsMin = !verticalIsMin && topLeftCost < topRightCost;
-
-						if(verticalIsMin){
-							matrix[x][y].updateTotalCost(verticalCost);
-							matrix[x][y].prevCell = topVertical;
-						}else if(topLeftIsMin){
-							matrix[x][y].updateTotalCost(topLeftCost);
-							matrix[x][y].prevCell = topLeft;
-						}else{
-							matrix[x][y].updateTotalCost(topRightCost);
-							matrix[x][y].prevCell = topRight;
+							if (verticalIsMin) {
+								matrix[x][y].updateTotalCost(verticalCost);
+								matrix[x][y].prevCell = topVertical;
+							} else if (topLeftIsMin) {
+								matrix[x][y].updateTotalCost(topLeftCost);
+								matrix[x][y].prevCell = topLeft;
+							} else {
+								matrix[x][y].updateTotalCost(topRightCost);
+								matrix[x][y].prevCell = topRight;
+							}
 						}
 					}
-				}
-			});
+				});
+			}catch(Exception exception){
+				logger.log("ok");
+			}
 
 			popForEachParameters();
 		}
