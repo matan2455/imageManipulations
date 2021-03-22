@@ -86,25 +86,16 @@ public class ImageProcessor extends FunctioalForEachLoops {
 		return ans;
 	}
 	
-	//MARK: Unimplemented methods
-	public BufferedImage greyscale() {
-		//TODO: Implement this method, remove the exception.
-		logger.log("applies greyscale interpolation");
-		BufferedImage ans = newEmptyOutputSizedImage();
 
-		int r = rgbWeights.redWeight;
-		int g = rgbWeights.greenWeight;
-		int b = rgbWeights.blueWeight;
-		int sumWeights = rgbWeights.weightsSum;
+	public BufferedImage greyscale() {
+
+		logger.log("applies greyscale interpolation");
+		BufferedImage ans = newEmptyInputSizedImage();
 
 		pushForEachParameters();
 		setForEachOutputParameters();
 		forEach((y, x) -> {
-			Color c = new Color(workingImage.getRGB(x, y));
-			float red = r*c.getRed();
-			float green = g*c.getGreen();
-			float blue = b*c.getBlue();
-			int greyColor = (int)((red + green + blue)/sumWeights);
+			int greyColor = CalculateGreyColor(this.workingImage,x,y);
 			ans.setRGB(x, y,new Color(greyColor,greyColor,greyColor).getRGB());
 		});
 
@@ -113,33 +104,15 @@ public class ImageProcessor extends FunctioalForEachLoops {
 	}
 
 	public BufferedImage gradientMagnitude() {
-		//TODO: Implement this method, remove the exception.
+
 		logger.log("applies gradient interpolation");
 		BufferedImage greyScaledImage = this.greyscale();
-		BufferedImage ans = newEmptyOutputSizedImage();
+		BufferedImage ans = newEmptyInputSizedImage();
 		pushForEachParameters();
-		setForEachOutputParameters();
 
 		forEach((y, x) -> {
-			int diffVertical;
-			int diffHorizontal;
 
-			int greyColor = new Color(greyScaledImage.getRGB(x,y)).getRed();
-
-			if(x <  greyScaledImage.getWidth() - 1) {
-				diffHorizontal = greyColor - new Color(greyScaledImage.getRGB(x+1,y)).getRed();
-			}else{
-				diffHorizontal = greyColor - new Color(greyScaledImage.getRGB(x-1,y)).getRed();;
-			}
-
-			if(y <  greyScaledImage.getHeight() - 1) {
-				diffVertical = greyColor - new Color(greyScaledImage.getRGB(x,y+1)).getRed();
-			}else{
-				diffVertical = greyColor - new Color(greyScaledImage.getRGB(x,y-1)).getRed();
-			}
-
-			int color = MAX_COLOR_VALUE - (int)Math.sqrt((diffVertical*diffVertical + diffHorizontal*diffHorizontal)/2.0);
-			Color c = new Color(color,color,color);
+			Color c = getGradientMagnitude(greyScaledImage,x,y,false);
 			ans.setRGB(x, y,c.getRGB());
 		});
 
@@ -148,17 +121,10 @@ public class ImageProcessor extends FunctioalForEachLoops {
 	}
 
 	public BufferedImage bilinear() {
-		//TODO: Implement this method, remove the exception.
+
 		logger.log("applies resize with bilinear interpolation");
 
-		//create padded image - inspired by stack overflow - https://stackoverflow.com/questions/5836203/java-padding-image
-		BufferedImage paddedImage = new BufferedImage(workingImage.getWidth() + 2, workingImage.getHeight()+2, workingImage.getType());
-		Graphics graphics = paddedImage.getGraphics();
-		graphics.setColor(Color.white);
-		graphics.fillRect(0, 0, workingImage.getWidth() + 2 , workingImage.getHeight() + 2);
-		graphics.drawImage(workingImage, 1, 1, null);
-		graphics.dispose();
-
+		BufferedImage paddedImage = padImage(this.workingImage,2);
 		BufferedImage ans = newEmptyOutputSizedImage();
 		pushForEachParameters();
 		setForEachOutputParameters();
@@ -176,7 +142,18 @@ public class ImageProcessor extends FunctioalForEachLoops {
 		return ans;
 	}
 
+	public BufferedImage padImage(BufferedImage imageToPad,int margin){
 
+		//create padded image - inspired by stack overflow - https://stackoverflow.com/questions/5836203/java-padding-image
+		BufferedImage paddedImage = new BufferedImage(workingImage.getWidth() + margin, workingImage.getHeight()+margin, workingImage.getType());
+		Graphics graphics = paddedImage.getGraphics();
+		graphics.setColor(Color.white);
+		graphics.fillRect(0, 0, workingImage.getWidth() + margin , workingImage.getHeight() + margin);
+		graphics.drawImage(workingImage, margin, margin, null);
+		graphics.dispose();
+
+		return paddedImage;
+	}
 
 	//MARK: Utilities
 	public final void setForEachInputParameters() {
@@ -209,6 +186,42 @@ public class ImageProcessor extends FunctioalForEachLoops {
 		return output;
 	}
 
+	public int CalculateGreyColor(BufferedImage imageToGreyScale,int x,int y){
+
+		int sumWeights = rgbWeights.weightsSum;
+
+		Color c = new Color(imageToGreyScale.getRGB(x, y));
+		float red = rgbWeights.redWeight *c.getRed();
+		float green = rgbWeights.greenWeight*c.getGreen();
+		float blue = rgbWeights.blueWeight*c.getBlue();
+
+		return (int)((red + green + blue)/sumWeights);
+
+	}
+
+	public Color getGradientMagnitude(BufferedImage greyScaledImage,int x,int y,boolean isSeamCarve) {
+		int diffVertical;
+		int diffHorizontal;
+
+		int greyColor = new Color(greyScaledImage.getRGB(x, y)).getRed();
+
+		if (x < greyScaledImage.getWidth() - 1) {
+			diffHorizontal = greyColor - new Color(greyScaledImage.getRGB(x + 1, y)).getRed();
+		} else {
+			diffHorizontal = greyColor - new Color(greyScaledImage.getRGB(x - 1, y)).getRed();
+		}
+
+		if (y < greyScaledImage.getHeight() - 1) {
+			diffVertical = greyColor - new Color(greyScaledImage.getRGB(x, y + 1)).getRed();
+		} else {
+			diffVertical = greyColor - new Color(greyScaledImage.getRGB(x, y - 1)).getRed();
+		}
+
+		int squaredSum = diffVertical * diffVertical + diffHorizontal * diffHorizontal;
+		int color = isSeamCarve? (int) Math.sqrt(squaredSum):MAX_COLOR_VALUE - (int) Math.sqrt(squaredSum / 2.0);
+		return new Color(color, color, color);
+	}
+
 	private static class NearestCells {
 
 		Cell q_11;
@@ -230,15 +243,15 @@ public class ImageProcessor extends FunctioalForEachLoops {
 			int y_bottom = (int)Math.floor(this.y_scaeld);
 			int y_top = (int)Math.ceil(this.y_scaeld);
 
-			this.q_11 = new Cell(x_left,y_top, new Color(paddedImage.getRGB(x_left,y_top)));
-			this.q_12 = new Cell(x_right,y_top, new Color(paddedImage.getRGB(x_right,y_top)));
-			this.q_21 = new Cell(x_left,y_bottom, new Color(paddedImage.getRGB(x_left,y_bottom)));
-			this.q_22 = new Cell(x_right,y_bottom, new Color(paddedImage.getRGB(x_right,y_bottom)));
+			this.q_11 = new Cell(x_left, y_top, new Color(paddedImage.getRGB(x_left, y_top)));
+			this.q_12 = new Cell(x_right, y_top, new Color(paddedImage.getRGB(x_right, y_top)));
+			this.q_21 = new Cell(x_left, y_bottom, new Color(paddedImage.getRGB(x_left, y_bottom)));
+			this.q_22 = new Cell(x_right, y_bottom, new Color(paddedImage.getRGB(x_right, y_bottom)));
 		}
 
 		public Cell interpolate(Cell cellOne,Cell cellTwo,boolean isHorizontal){
 
-			Cell approximatedCell = new Cell(x_scaled,y_scaeld,new Color(0));
+			Cell approximatedCell = new Cell(x_scaled, y_scaeld, new Color(0));
 			double distFromCellOne = calcDistFromPoint(cellOne,approximatedCell,isHorizontal);
 			double distBetweenCells = calcDistFromPoint(cellOne,cellTwo,isHorizontal);
 			double t = distBetweenCells > 0? distFromCellOne/distBetweenCells:1.0;
@@ -250,7 +263,7 @@ public class ImageProcessor extends FunctioalForEachLoops {
 			double weightedX = (cellOne.x_pos + cellTwo.x_pos)/2;
 			double weightedY = (cellOne.y_pos + cellTwo.y_pos)/2;
 
-			return new Cell(weightedX,weightedY,new Color(red,green,blue));
+			return new Cell(weightedX, weightedY, new Color(red, green, blue));
 		}
 
 		//convert to vertical or horizontal distance.
@@ -258,7 +271,7 @@ public class ImageProcessor extends FunctioalForEachLoops {
 			return isHorizontal? CellOne.x_pos - cellTwo.x_pos :  CellOne.y_pos- cellTwo.y_pos;
 		}
 
-		private class Cell{
+		private static class Cell{
 
 			double x_pos;
 			double y_pos;
