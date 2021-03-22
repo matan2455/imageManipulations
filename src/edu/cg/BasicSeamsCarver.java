@@ -1,5 +1,6 @@
 package edu.cg;
 
+import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.util.LinkedList;
 
@@ -39,7 +40,7 @@ public class BasicSeamsCarver extends ImageProcessor {
 	// TODO :  Decide on the fields your BasicSeamsCarver should include. Refer to the recitation and homework 
 			// instructions PDF to make an educated decision.
 
-	BufferedImage greyScaledImage;
+//	BufferedImage greyScaledImage;
 	BufferedImage seamCarvedImage;
 	DPMetric DPMatrix;
 	LinkedList<Coordinate[]> removedSeams;
@@ -49,7 +50,7 @@ public class BasicSeamsCarver extends ImageProcessor {
 		super((s) -> logger.log("Seam carving: " + s), workingImage, rgbWeights, outWidth, outHeight);
 		// TODO : Include some additional initialization procedures.
 
-		this.greyScaledImage = this.greyscale();
+//		this.greyScaledImage = this.greyscale();
 		this.seamCarvedImage = new BufferedImage(workingImage.getWidth(),workingImage.getHeight(),workingImage.getType());
 		pushForEachParameters();
 		setForEachParameters(workingImage.getWidth(),workingImage.getHeight());
@@ -72,7 +73,7 @@ public class BasicSeamsCarver extends ImageProcessor {
 
 		if(carvingScheme.equals(CarvingScheme.HORIZONTAL_VERTICAL)){
 			CarveMultipleVerticalSeams(numberOfVerticalSeamsToCarve);
-			CarveMultipleHorizontalSeams(numberOfHorizontalSeamsToCarve);
+//			CarveMultipleHorizontalSeams(numberOfHorizontalSeamsToCarve);
 		}
 		else if(carvingScheme.equals(CarvingScheme.VERTICAL_HORIZONTAL)){
 
@@ -114,17 +115,13 @@ public class BasicSeamsCarver extends ImageProcessor {
 		setForEachParameters(tempEditedImage.getWidth(),tempEditedImage.getHeight());
 		try {
 			forEach((y, x) -> {
-
 				int destLocationX = x;
 				//			TODO - outX instead
 				if (x > seamCoordinates[y].metric_X) {
 					destLocationX = destLocationX - 1;
 				}
-
 				if (seamCoordinates[y].metric_X != x) {
 					tempEditedImage.setRGB(destLocationX, y, this.seamCarvedImage.getRGB(x, y));
-					tempGreyScaledImage.setRGB(destLocationX, y, greyScaledImage.getRGB(x, y));
-
 				}
 			});
 		}catch(Exception exception){
@@ -133,11 +130,9 @@ public class BasicSeamsCarver extends ImageProcessor {
 		popForEachParameters();
 
 		this.seamCarvedImage = tempEditedImage;
-		this.greyScaledImage = tempGreyScaledImage;
 		DPMatrix.removeVerticalSeam(seamCoordinates);
 		DPMatrix.updateCells(seamCoordinates);
 		setForEachWidth(seamCarvedImage.getWidth());
-
 	}
 
 	public void CarveIntermittentSeams(int numberOfVerticalSeamsToCarve, int numberOfHorizontalSeamsToCarve){
@@ -182,25 +177,24 @@ public class BasicSeamsCarver extends ImageProcessor {
 		setForEachParameters(this.inWidth,this.inHeight);
 
 		try {
-		forEach((y,x) -> ans.setRGB(x,y,workingImage.getRGB(x,y)));
+			forEach((y,x) -> ans.setRGB(x,y,workingImage.getRGB(x,y)));
+			popForEachParameters();
 
-		popForEachParameters();
-
-			if (showVerticalSeams) {
-				CarveMultipleVerticalSeams(numberOfVerticalSeamsToCarve);
-				for (Coordinate[] carvedSeam : removedSeams) {
-					for (Coordinate coordinate : carvedSeam) {
-						ans.setRGB(coordinate.X, coordinate.Y, seamColorRGB);
+				if (showVerticalSeams) {
+					CarveMultipleVerticalSeams(numberOfVerticalSeamsToCarve);
+					for (Coordinate[] carvedSeam : removedSeams) {
+						for (Coordinate coordinate : carvedSeam) {
+							ans.setRGB(coordinate.X, coordinate.Y, seamColorRGB);
+						}
+					}
+				} else {
+					CarveMultipleHorizontalSeams(numberOfHorizontalSeamsToCarve);
+					for (Coordinate[] carvedSeam : removedSeams) {
+						for (Coordinate coordinate : carvedSeam) {
+							ans.setRGB(coordinate.X, coordinate.Y, seamColorRGB);
+						}
 					}
 				}
-			} else {
-				CarveMultipleHorizontalSeams(numberOfHorizontalSeamsToCarve);
-				for (Coordinate[] carvedSeam : removedSeams) {
-					for (Coordinate coordinate : carvedSeam) {
-						ans.setRGB(coordinate.X, coordinate.Y, seamColorRGB);
-					}
-				}
-			}
 		} catch(Exception exception){
 			logger.log("ok");
 		}
@@ -223,10 +217,9 @@ public class BasicSeamsCarver extends ImageProcessor {
 			pushForEachParameters();
 			setForEachParameters(width,height);
 			forEach((y, x) -> {
-				int greyColor = CalculateGreyColor(seamCarvedImage,x,y);
-				int energy = getGradientMagnitude(greyScaledImage,x,y,true);
-
-				this.matrix[x][y] = new DPCell(x, y,energy,greyColor);
+				int greyColorCurrent = CalculateGreyColor(seamCarvedImage,x,y);
+				int energy = calculateEnergy(x,y);
+				this.matrix[x][y] = new DPCell(x, y,energy,greyColorCurrent);
 			});
 			popForEachParameters();
 		}
@@ -234,13 +227,11 @@ public class BasicSeamsCarver extends ImageProcessor {
 		public void updateCells(Coordinate[] seamCoordinates){
 			try {
 				for (Coordinate coordinate : seamCoordinates) {
-					if (coordinate.X != 0) {
-						this.matrix[coordinate.metric_X - 1][coordinate.Y].energy = getGradientMagnitude(greyScaledImage, coordinate.metric_X - 1, coordinate.Y, true);
-						this.matrix[coordinate.metric_X - 1][coordinate.Y].intensity = CalculateGreyColor(seamCarvedImage, coordinate.metric_X - 1, coordinate.Y);
+					if (coordinate.metric_X != 0) {
+						this.matrix[coordinate.metric_X - 1][coordinate.Y].energy = calculateEnergy(coordinate.metric_X - 1, coordinate.Y);
 					}
-					if (coordinate.X < greyScaledImage.getWidth()) {
-						this.matrix[coordinate.metric_X - 1][coordinate.Y].energy = getGradientMagnitude(greyScaledImage, coordinate.metric_X, coordinate.Y, true);
-						this.matrix[coordinate.metric_X - 1][coordinate.Y].intensity = CalculateGreyColor(seamCarvedImage, coordinate.metric_X, coordinate.Y);
+					if (coordinate.metric_X < seamCarvedImage.getWidth()) {
+						this.matrix[coordinate.metric_X - 1][coordinate.Y].energy = calculateEnergy(coordinate.metric_X, coordinate.Y);
 					}
 				}
 
@@ -250,6 +241,30 @@ public class BasicSeamsCarver extends ImageProcessor {
 			}
 		}
 
+		public int calculateEnergy(int x,int y) {
+
+
+			int greyColorCurrent = CalculateGreyColor(seamCarvedImage,x,y);
+			int greyColorHorizontal;
+			int greyColorVertical;
+
+			if (x < seamCarvedImage.getWidth() - 1) {
+				greyColorHorizontal = CalculateGreyColor(seamCarvedImage,x+1,y);
+			} else {
+				greyColorHorizontal = CalculateGreyColor(seamCarvedImage,x-1,y);
+			}
+
+			if (y < seamCarvedImage.getHeight() - 1) {
+				greyColorVertical = CalculateGreyColor(seamCarvedImage,x,y+1);
+			} else {
+				greyColorVertical = CalculateGreyColor(seamCarvedImage,x,y-1);
+			}
+
+			int diffVertical = greyColorCurrent - greyColorVertical;
+			int diffHorizontal = greyColorCurrent - greyColorHorizontal;
+			int squaredSum = diffVertical * diffVertical + diffHorizontal * diffHorizontal;
+			return (int) Math.sqrt(squaredSum);
+		}
 
 		public void updateCostVertical(){
 			pushForEachParameters();
@@ -284,7 +299,7 @@ public class BasicSeamsCarver extends ImageProcessor {
 
 							double verticalCost = matrix[x][y - 1].totalCost + leftRightDiff;
 							double topLeftCost = matrix[x - 1][y - 1].totalCost + leftRightDiff + topLeftDiff;
-							double topRightCost = matrix[x - 1][y - 1].totalCost + leftRightDiff + topRightDiff;
+							double topRightCost = matrix[x + 1][y - 1].totalCost + leftRightDiff + topRightDiff;
 
 							boolean verticalIsMin = verticalCost < topLeftCost && verticalCost < topRightCost;
 							boolean topLeftIsMin = !verticalIsMin && topLeftCost < topRightCost;
@@ -348,7 +363,6 @@ public class BasicSeamsCarver extends ImageProcessor {
 
 //			iterate over all columns to find the one with min total cost at it's bottom cell.
 			for (DPCell[] dpCells : matrix) {
-				System.out.println("contentent is : " + dpCells[this.height - 1].totalCost + "defending : " + currentDPCell.totalCost);
 				if (dpCells[this.height - 1].totalCost < currentDPCell.totalCost) {
 					currentDPCell = dpCells[this.height - 1];
 				}
