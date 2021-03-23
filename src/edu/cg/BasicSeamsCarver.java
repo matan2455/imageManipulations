@@ -2,6 +2,7 @@ package edu.cg;
 
 import java.awt.*;
 import java.awt.image.BufferedImage;
+import java.util.HashMap;
 import java.util.LinkedList;
 
 
@@ -41,6 +42,9 @@ public class BasicSeamsCarver extends ImageProcessor {
 			// instructions PDF to make an educated decision.
 
 //	BufferedImage greyScaledImage;
+	double totalDiff = 0;
+	int countDiffs;
+	double avgDiff = 5;
 	BufferedImage seamCarvedImage;
 	DPMetric DPMatrix;
 	LinkedList<Coordinate[]> removedSeams;
@@ -109,7 +113,6 @@ public class BasicSeamsCarver extends ImageProcessor {
 		Coordinate[] seamCoordinates = DPMatrix.getVerticalSeam();
 		removedSeams.add(seamCoordinates);
 		BufferedImage tempEditedImage = new BufferedImage(this.seamCarvedImage.getWidth()-1,this.seamCarvedImage.getHeight(),this.seamCarvedImage.getType());
-		BufferedImage tempGreyScaledImage = new BufferedImage(tempEditedImage.getWidth(),tempEditedImage.getHeight(),tempEditedImage.getType());
 
 		pushForEachParameters();
 		setForEachParameters(tempEditedImage.getWidth(),tempEditedImage.getHeight());
@@ -175,17 +178,25 @@ public class BasicSeamsCarver extends ImageProcessor {
 		BufferedImage ans = new BufferedImage(this.inWidth,this.inHeight,workingImageType);
 		pushForEachParameters();
 		setForEachParameters(this.inWidth,this.inHeight);
-
+		HashMap<Integer,Coordinate> testDups = new HashMap<>();
 		try {
 			forEach((y,x) -> ans.setRGB(x,y,workingImage.getRGB(x,y)));
 			popForEachParameters();
 
 				if (showVerticalSeams) {
 					CarveMultipleVerticalSeams(numberOfVerticalSeamsToCarve);
+					int count = 0;
 					for (Coordinate[] carvedSeam : removedSeams) {
 						for (Coordinate coordinate : carvedSeam) {
 							ans.setRGB(coordinate.X, coordinate.Y, seamColorRGB);
+							count++;
+							if(testDups.containsKey(coordinate.X * coordinate.Y + coordinate.Y)){
+								System.out.println("X: " + coordinate.X + " Y: " + coordinate.Y);
+							}
+							testDups.put(coordinate.X * coordinate.Y + coordinate.Y,coordinate);
 						}
+//						System.out.println("count: " + count);
+						count = 0;
 					}
 				} else {
 					CarveMultipleHorizontalSeams(numberOfHorizontalSeamsToCarve);
@@ -269,6 +280,7 @@ public class BasicSeamsCarver extends ImageProcessor {
 		public void updateCostVertical(){
 			pushForEachParameters();
 			setForEachParameters(matrix.length,matrix[0].length);
+
 			try {
 				forEach((y, x) -> {
 
@@ -281,25 +293,30 @@ public class BasicSeamsCarver extends ImageProcessor {
 						DPCell left = x > 0 ? matrix[x - 1][y] : null;
 						DPCell right = x < matrix.length - 1 ? matrix[x + 1][y] : null;
 
+
 						// If x is a left or right bound we only allow to continue a seam the inner pixels
 						// this is to avoid seam always chosen from the bounds (that are positively biased by not creating new pixel matches)
 						if (x == 0) {
-							double addedCost = matrix[x + 1][y - 1].totalCost + Math.abs(topVertical.intensity - right.intensity);
-							matrix[x][y].updateTotalCost(addedCost);
-							matrix[x][y].prevCell = matrix[x + 1][y - 1];
+							double verticalCost = topVertical.totalCost;
+							double rightCost = right.totalCost + Math.abs(topVertical.intensity - right.intensity);
+							matrix[x][y].updateTotalCost(Math.min(verticalCost, rightCost)+avgDiff);
+							matrix[x][y].prevCell = verticalCost < rightCost? topVertical: topRight;
 						} else if (x == matrix.length - 1) {
-							double addedCost = matrix[x - 1][y - 1].totalCost + Math.abs(topVertical.intensity - left.intensity);
-							matrix[x][y].updateTotalCost(addedCost);
-							matrix[x][y].prevCell = matrix[x - 1][y - 1];
+							double verticalCost = topVertical.totalCost;
+							double leftCost = topLeft.totalCost + Math.abs(topVertical.intensity - left.intensity);
+							matrix[x][y].updateTotalCost(Math.min(verticalCost,leftCost)+avgDiff);
+							matrix[x][y].prevCell = verticalCost < leftCost? topVertical: topLeft;;
 						} else {
+
 
 							int leftRightDiff = Math.abs(right.intensity - left.intensity);
 							int topLeftDiff = Math.abs(topVertical.intensity - left.intensity);
 							int topRightDiff = Math.abs(topVertical.intensity - right.intensity);
-
-							double verticalCost = matrix[x][y - 1].totalCost + leftRightDiff;
-							double topLeftCost = matrix[x - 1][y - 1].totalCost + leftRightDiff + topLeftDiff;
-							double topRightCost = matrix[x + 1][y - 1].totalCost + leftRightDiff + topRightDiff;
+							totalDiff += leftRightDiff;
+							countDiffs++;
+							double verticalCost = topVertical.totalCost + leftRightDiff;
+							double topLeftCost = topLeft.totalCost + leftRightDiff + topLeftDiff;
+							double topRightCost = topRight.totalCost + leftRightDiff + topRightDiff;
 
 							boolean verticalIsMin = verticalCost < topLeftCost && verticalCost < topRightCost;
 							boolean topLeftIsMin = !verticalIsMin && topLeftCost < topRightCost;
@@ -320,7 +337,7 @@ public class BasicSeamsCarver extends ImageProcessor {
 			}catch(Exception exception){
 				logger.log("ok");
 			}
-
+			System.out.println("avg diff is :" + totalDiff/countDiffs);
 			popForEachParameters();
 		}
 
