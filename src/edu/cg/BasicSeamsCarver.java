@@ -2,433 +2,284 @@ package edu.cg;
 
 import java.awt.*;
 import java.awt.image.BufferedImage;
-import java.util.HashMap;
-import java.util.LinkedList;
 
 
 public class BasicSeamsCarver extends ImageProcessor {
 
-	// An enum describing the carving scheme used by the seams carver.
-	// VERTICAL_HORIZONTAL means vertical seams are removed first.
-	// HORIZONTAL_VERTICAL means horizontal seams are removed first.
-	// INTERMITTENT means seams are removed intermittently : vertical, horizontal, vertical, horizontal etc.
-	public static enum CarvingScheme {
-		VERTICAL_HORIZONTAL("Vertical seams first"),
-		HORIZONTAL_VERTICAL("Horizontal seams first"),
-		INTERMITTENT("Intermittent carving");
-		
-		public final String description;
-		
-		private CarvingScheme(String description) {
-			this.description = description;
-		}
-	}
-	
-	// A simple coordinate class which assists the implementation.
-	protected static class Coordinate{
-		public int X;
-		public int Y;
-		public int metric_X;
-		public int metric_Y;
-		public Coordinate(int X, int Y,int metric_X,int metric_Y) {
-			this.X = X;
-			this.Y = Y;
-			this.metric_X = metric_X;
-			this.metric_Y = metric_Y;
-		}
-	}
-	
-	// TODO :  Decide on the fields your BasicSeamsCarver should include. Refer to the recitation and homework 
-			// instructions PDF to make an educated decision.
-
-//	BufferedImage greyScaledImage;
-	double totalDiff = 0;
-	int countDiffs;
-	double avgDiff = 5;
-	BufferedImage seamCarvedImage;
-	DPMetric DPMatrix;
-	LinkedList<Coordinate[]> removedSeams;
-	
-	public BasicSeamsCarver(Logger logger, BufferedImage workingImage,
-			int outWidth, int outHeight, RGBWeights rgbWeights) {
-		super((s) -> logger.log("Seam carving: " + s), workingImage, rgbWeights, outWidth, outHeight);
-		// TODO : Include some additional initialization procedures.
-
-//		this.greyScaledImage = this.greyscale();
-		this.seamCarvedImage = new BufferedImage(workingImage.getWidth(),workingImage.getHeight(),workingImage.getType());
-		pushForEachParameters();
-		setForEachParameters(workingImage.getWidth(),workingImage.getHeight());
-		this.removedSeams = new LinkedList<>();
-		try {
-			forEach((y, x) -> seamCarvedImage.setRGB(x, y, workingImage.getRGB(x, y)));
-		}catch(Exception exception){
-			logger.log("ok");
-		}
-		popForEachParameters();
-
-		this.DPMatrix = new DPMetric(workingImage.getWidth(),workingImage.getHeight());
-
-	}
-
-
-	public BufferedImage carveImage(CarvingScheme carvingScheme) {
-		int numberOfVerticalSeamsToCarve = Math.abs(this.outWidth - this.inWidth);
-		int numberOfHorizontalSeamsToCarve = Math.abs(this.outHeight - this.inHeight);
-
-		if(carvingScheme.equals(CarvingScheme.HORIZONTAL_VERTICAL)){
-			CarveMultipleVerticalSeams(numberOfVerticalSeamsToCarve);
-//			CarveMultipleHorizontalSeams(numberOfHorizontalSeamsToCarve);
-		}
-		else if(carvingScheme.equals(CarvingScheme.VERTICAL_HORIZONTAL)){
-
-			CarveMultipleHorizontalSeams(numberOfHorizontalSeamsToCarve);
-			CarveMultipleVerticalSeams(numberOfVerticalSeamsToCarve);
-		}
-		else if(carvingScheme.equals(CarvingScheme.INTERMITTENT)){
-
-			CarveIntermittentSeams(numberOfVerticalSeamsToCarve,numberOfHorizontalSeamsToCarve);
-		}else{
-			throw new EnumConstantNotPresentException(CarvingScheme.class,carvingScheme.toString());
-		}
-
-		return this.seamCarvedImage;
-	}
-
-	private void CarveMultipleVerticalSeams(int numberOfVerticalSeamsToCarve){
-
-		while(numberOfVerticalSeamsToCarve-- > 0){
-			CarveImageVerticalSeam();
-		}
-	}
-
-	private void CarveMultipleHorizontalSeams(int numberOfHorizontalSeamsToCarve){
-
-		while(numberOfHorizontalSeamsToCarve-- > 0){
-			CarveImageHorizontalSeam();
-		}
-	}
-
-	public void CarveImageVerticalSeam(){
-		DPMatrix.updateCostVertical();
-		Coordinate[] seamCoordinates = DPMatrix.getVerticalSeam();
-		removedSeams.add(seamCoordinates);
-		BufferedImage tempEditedImage = new BufferedImage(this.seamCarvedImage.getWidth()-1,this.seamCarvedImage.getHeight(),this.seamCarvedImage.getType());
-
-		pushForEachParameters();
-		setForEachParameters(tempEditedImage.getWidth(),tempEditedImage.getHeight());
-		try {
-			forEach((y, x) -> {
-				int destLocationX = x;
-				//			TODO - outX instead
-				if (x > seamCoordinates[y].metric_X) {
-					destLocationX = destLocationX - 1;
-				}
-				if (seamCoordinates[y].metric_X != x) {
-					tempEditedImage.setRGB(destLocationX, y, this.seamCarvedImage.getRGB(x, y));
-				}
-			});
-		}catch(Exception exception){
-			logger.log("ok");
-		}
-		popForEachParameters();
-
-		this.seamCarvedImage = tempEditedImage;
-		DPMatrix.removeVerticalSeam(seamCoordinates);
-		DPMatrix.updateCells(seamCoordinates);
-		setForEachWidth(seamCarvedImage.getWidth());
-	}
-
-	public void CarveIntermittentSeams(int numberOfVerticalSeamsToCarve, int numberOfHorizontalSeamsToCarve){
-		while(numberOfHorizontalSeamsToCarve-- > 0 && numberOfVerticalSeamsToCarve-- > 0){
-			CarveImageVerticalSeam();
-			CarveImageHorizontalSeam();
-		}
-
-		while (numberOfHorizontalSeamsToCarve-- > 0 || numberOfVerticalSeamsToCarve-- > 0){
-			if (numberOfHorizontalSeamsToCarve > 0) {
-				CarveImageHorizontalSeam();
-			} else {
-				CarveImageVerticalSeam();
-			}
-		}
-	}
-
-	public BufferedImage CarveImageHorizontalSeam(){
-		return this.workingImage;
-	}
-
-	public BufferedImage CarveImageIntermittent(int numberOfVerticalSeamsToCarve, int numberOfHorizontalSeamsToCarve){
-
-		return this.workingImage;
-	}
-
-
-	public BufferedImage showSeams(boolean showVerticalSeams, int seamColorRGB) {
-		int numberOfVerticalSeamsToCarve = Math.abs(this.outWidth - this.inWidth);
-		int numberOfHorizontalSeamsToCarve = Math.abs(this.outHeight - this.inHeight);
-		// TODO :  Present either vertical or horizontal seams on the input image.
-				// If showVerticalSeams = true, carve 'numberOfVerticalSeamsToCarve' vertical seams from the image.
-				// Then, generate a new image from the input image in which you mark all of the vertical seams that
-				// were chosen in the Seam Carving process. 
-				// This is done by painting each pixel in each seam with 'seamColorRGB' (overriding its' previous value). 
-				// Similarly, if showVerticalSeams = false, carve 'numberOfHorizontalSeamsToCarve' horizontal seams
-				// from the image.
-				// Then, generate a new image from the input image in which you mark all of the horizontal seams that
-				// were chosen in the Seam Carving process.
-		BufferedImage ans = new BufferedImage(this.inWidth,this.inHeight,workingImageType);
-		pushForEachParameters();
-		setForEachParameters(this.inWidth,this.inHeight);
-		HashMap<Integer,Coordinate> testDups = new HashMap<>();
-		try {
-			forEach((y,x) -> ans.setRGB(x,y,workingImage.getRGB(x,y)));
-			popForEachParameters();
-
-				if (showVerticalSeams) {
-					CarveMultipleVerticalSeams(numberOfVerticalSeamsToCarve);
-					int count = 0;
-					for (Coordinate[] carvedSeam : removedSeams) {
-						for (Coordinate coordinate : carvedSeam) {
-							ans.setRGB(coordinate.X, coordinate.Y, seamColorRGB);
-							count++;
-							if(testDups.containsKey(coordinate.X * coordinate.Y + coordinate.Y)){
-								System.out.println("X: " + coordinate.X + " Y: " + coordinate.Y);
-							}
-							testDups.put(coordinate.X * coordinate.Y + coordinate.Y,coordinate);
-						}
-//						System.out.println("count: " + count);
-						count = 0;
-					}
-				} else {
-					CarveMultipleHorizontalSeams(numberOfHorizontalSeamsToCarve);
-					for (Coordinate[] carvedSeam : removedSeams) {
-						for (Coordinate coordinate : carvedSeam) {
-							ans.setRGB(coordinate.X, coordinate.Y, seamColorRGB);
-						}
-					}
-				}
-		} catch(Exception exception){
-			logger.log("ok");
-		}
-		return ans;
-	}
-
-
-	private class DPMetric {
-
-		int height;
-		int width;
-		DPCell[][] matrix;
-
-		public DPMetric(int width , int height) {
-
-			this.matrix = new DPCell[width][height];
-			this.height = height;
-			this.width = width;
-
-			pushForEachParameters();
-			setForEachParameters(width,height);
-			forEach((y, x) -> {
-				int greyColorCurrent = CalculateGreyColor(seamCarvedImage,x,y);
-				int energy = calculateEnergy(x,y);
-				this.matrix[x][y] = new DPCell(x, y,energy,greyColorCurrent);
-			});
-			popForEachParameters();
-		}
-
-		public void updateCells(Coordinate[] seamCoordinates){
-			try {
-				for (Coordinate coordinate : seamCoordinates) {
-					if (coordinate.metric_X != 0) {
-						this.matrix[coordinate.metric_X - 1][coordinate.Y].energy = calculateEnergy(coordinate.metric_X - 1, coordinate.Y);
-					}
-					if (coordinate.metric_X < seamCarvedImage.getWidth()) {
-						this.matrix[coordinate.metric_X - 1][coordinate.Y].energy = calculateEnergy(coordinate.metric_X, coordinate.Y);
-					}
-				}
-
-			}
-			catch(Exception exception){
-				logger.log("ok");
-			}
-		}
-
-		public int calculateEnergy(int x,int y) {
-
-
-			int greyColorCurrent = CalculateGreyColor(seamCarvedImage,x,y);
-			int greyColorHorizontal;
-			int greyColorVertical;
-
-			if (x < seamCarvedImage.getWidth() - 1) {
-				greyColorHorizontal = CalculateGreyColor(seamCarvedImage,x+1,y);
-			} else {
-				greyColorHorizontal = CalculateGreyColor(seamCarvedImage,x-1,y);
-			}
-
-			if (y < seamCarvedImage.getHeight() - 1) {
-				greyColorVertical = CalculateGreyColor(seamCarvedImage,x,y+1);
-			} else {
-				greyColorVertical = CalculateGreyColor(seamCarvedImage,x,y-1);
-			}
-
-			int diffVertical = greyColorCurrent - greyColorVertical;
-			int diffHorizontal = greyColorCurrent - greyColorHorizontal;
-			int squaredSum = diffVertical * diffVertical + diffHorizontal * diffHorizontal;
-			return (int) Math.sqrt(squaredSum);
-		}
-
-		public void updateCostVertical(){
-			pushForEachParameters();
-			setForEachParameters(matrix.length,matrix[0].length);
-
-			try {
-				forEach((y, x) -> {
-
-					//first raw cost is simply the cell energy
-					if (y > 0) {
-
-						DPCell topLeft = x > 0 ? matrix[x - 1][y - 1] : null;
-						DPCell topRight = x < matrix.length - 1 ? matrix[x + 1][y - 1] : null;
-						DPCell topVertical = matrix[x][y - 1];
-						DPCell left = x > 0 ? matrix[x - 1][y] : null;
-						DPCell right = x < matrix.length - 1 ? matrix[x + 1][y] : null;
-
-
-						// If x is a left or right bound we only allow to continue a seam the inner pixels
-						// this is to avoid seam always chosen from the bounds (that are positively biased by not creating new pixel matches)
-						if (x == 0) {
-							double verticalCost = topVertical.totalCost;
-							double rightCost = right.totalCost + Math.abs(topVertical.intensity - right.intensity);
-							matrix[x][y].updateTotalCost(Math.min(verticalCost, rightCost)+avgDiff);
-							matrix[x][y].prevCell = verticalCost < rightCost? topVertical: topRight;
-						} else if (x == matrix.length - 1) {
-							double verticalCost = topVertical.totalCost;
-							double leftCost = topLeft.totalCost + Math.abs(topVertical.intensity - left.intensity);
-							matrix[x][y].updateTotalCost(Math.min(verticalCost,leftCost)+avgDiff);
-							matrix[x][y].prevCell = verticalCost < leftCost? topVertical: topLeft;;
-						} else {
-
-
-							int leftRightDiff = Math.abs(right.intensity - left.intensity);
-							int topLeftDiff = Math.abs(topVertical.intensity - left.intensity);
-							int topRightDiff = Math.abs(topVertical.intensity - right.intensity);
-							totalDiff += leftRightDiff;
-							countDiffs++;
-							double verticalCost = topVertical.totalCost + leftRightDiff;
-							double topLeftCost = topLeft.totalCost + leftRightDiff + topLeftDiff;
-							double topRightCost = topRight.totalCost + leftRightDiff + topRightDiff;
-
-							boolean verticalIsMin = verticalCost < topLeftCost && verticalCost < topRightCost;
-							boolean topLeftIsMin = !verticalIsMin && topLeftCost < topRightCost;
-
-							if (verticalIsMin) {
-								matrix[x][y].updateTotalCost(verticalCost);
-								matrix[x][y].prevCell = topVertical;
-							} else if (topLeftIsMin) {
-								matrix[x][y].updateTotalCost(topLeftCost);
-								matrix[x][y].prevCell = topLeft;
-							} else {
-								matrix[x][y].updateTotalCost(topRightCost);
-								matrix[x][y].prevCell = topRight;
-							}
-						}
-					}
-				});
-			}catch(Exception exception){
-				logger.log("ok");
-			}
-			System.out.println("avg diff is :" + totalDiff/countDiffs);
-			popForEachParameters();
-		}
-
-		public void removeVerticalSeam(Coordinate[] seamCoordinates){
-
-
-			DPCell[][] tempMatrix = new DPCell[this.width-1][this.height];
-
-			pushForEachParameters();
-			setForEachParameters(width,height);
-			try {
-				forEach((y, x) -> {
-					int destLocationX = x;
-
-					if (x > seamCoordinates[y].metric_X) {
-						destLocationX = destLocationX - 1;
-					}
-
-					if (x != seamCoordinates[y].metric_X) {
-						tempMatrix[destLocationX][y] = this.matrix[x][y];
-						tempMatrix[destLocationX][y].outLocationX = destLocationX;
-					}
-				});
-			} catch(Exception exception){
-				logger.log("ok");
-			}
-
-			popForEachParameters();
-			this.width--;
-			this.matrix = tempMatrix;
-
-		}
-
-//		return an array of the minimum seam coordinates
-		public Coordinate[] getVerticalSeam() {
-			int count = 0;
-			Coordinate[] seamCoordinates = new Coordinate[this.height];
-			DPCell currentDPCell = matrix[this.width -1][this.height -1];
-			Coordinate currentCoordinate;
-
-//			iterate over all columns to find the one with min total cost at it's bottom cell.
-			for (DPCell[] dpCells : matrix) {
-				if (dpCells[this.height - 1].totalCost < currentDPCell.totalCost) {
-					currentDPCell = dpCells[this.height - 1];
-				}
-			}
-
-//			iterate back using the pointers to retrieve the seam.
-			currentCoordinate = new Coordinate(currentDPCell.inLocationX, currentDPCell.inLocationY, currentDPCell.outLocationX, currentDPCell.outLocationY);
-			seamCoordinates[count++] = currentCoordinate;
-
-			while(currentDPCell.prevCell != null){
-				currentDPCell = currentDPCell.prevCell;
-
-				currentCoordinate = new Coordinate(currentDPCell.inLocationX, currentDPCell.inLocationY, currentDPCell.outLocationX, currentDPCell.outLocationY);
-				seamCoordinates[count++] = currentCoordinate;
-			}
-
-			return seamCoordinates;
-		}
-
-		 class DPCell {
-
-			int outLocationX;
-			int outLocationY;
-			int inLocationX;
-			int inLocationY;
-			int intensity;
-			int energy;
-			double totalCost;
-
-			DPCell prevCell;
-
-			public DPCell(int x, int y, int energy,int greyScaleIntensity){
-				this.outLocationX = x;
-				this.outLocationY = y;
-				this.inLocationX = x;
-				this.inLocationY = y;
-				this.intensity = greyScaleIntensity;
-				this.energy = energy;
-				this.totalCost = energy;
-				this.prevCell = null;
-			}
-
-			public void updateTotalCost(double addedCost){
-				this.totalCost = this.energy + addedCost;
-
-			}
-
-		}
-
-	}
-
+    // An enum describing the carving scheme used by the seams carver.
+    // VERTICAL_HORIZONTAL means vertical seams are removed first.
+    // HORIZONTAL_VERTICAL means horizontal seams are removed first.
+    // INTERMITTENT means seams are removed intermittently : vertical, horizontal, vertical, horizontal etc.
+    public static enum CarvingScheme {
+        VERTICAL_HORIZONTAL("Vertical seams first"),
+        HORIZONTAL_VERTICAL("Horizontal seams first"),
+        INTERMITTENT("Intermittent carving");
+
+        public final String description;
+
+        private CarvingScheme(String description) {
+            this.description = description;
+        }
+    }
+
+    // A simple coordinate class which assists the implementation.
+    protected class Coordinate{
+        public int X;
+        public int Y;
+        public Coordinate(int X, int Y) {
+            this.X = X;
+            this.Y = Y;
+        }
+    }
+
+     final int EDGE_PENALTY = 255;
+     final int inWidth;
+     final int inHeight;
+     int currentHeight;
+     int currentWidth;
+     Coordinate[][] currentCoordinates;
+     BufferedImage seamCarvedImage;
+     int[][] greyScaleMatrix;
+     int[][] energyMatrix;
+     Coordinate[][] parentMatrix;
+    double[][] costMatrix;
+
+    // TODO :  Decide on the fields your BasicSeamsCarver should include. Refer to the recitation and homework
+    // instructions PDF to make an educated decision.
+
+    public BasicSeamsCarver(Logger logger, BufferedImage workingImage,
+                            int outWidth, int outHeight, RGBWeights rgbWeights) {
+        super((s) -> logger.log("Seam carving: " + s), workingImage, rgbWeights, outWidth, outHeight);
+        // TODO : Include some additional initialization procedures.
+        this.inWidth = workingImage.getWidth();
+        this.inHeight = workingImage.getHeight();
+        this.currentWidth = workingImage.getWidth();
+        this.currentHeight = workingImage.getHeight();
+        this.currentCoordinates = new Coordinate[inHeight][inWidth];
+        this.parentMatrix = new Coordinate[inHeight][inWidth];
+        this.seamCarvedImage = duplicateWorkingImage();
+
+
+        for(int x = 0 ; x < currentCoordinates.length;x++){
+            for(int y = 0 ; y < currentCoordinates[0].length; y++){
+                this.currentCoordinates[x][y] = new Coordinate(x,y);
+                this.parentMatrix[x][y] = new Coordinate(x,y);
+            }
+        }
+        System.out.println("ok");
+    }
+
+    public BufferedImage carveImage(CarvingScheme carvingScheme) {
+        int numberOfVerticalSeamsToCarve = Math.abs(this.outWidth - this.inWidth);
+        int numberOfHorizontalSeamsToCarve = Math.abs(this.outHeight - this.inHeight);
+        // TODO :  Perform Seam Carving. Overall you need to remove 'numberOfVerticalSeamsToCarve' vertical seams
+        // and 'numberOfHorizontalSeamsToCarve' horizontal seams from the image.
+        // Note you must consider the 'carvingScheme' parameter in your procedure.
+        // Return the resulting image.
+
+        switch(carvingScheme){
+
+            case VERTICAL_HORIZONTAL:
+                removeVerticalSeams(numberOfVerticalSeamsToCarve);
+                removeHorizontalSeams(numberOfHorizontalSeamsToCarve);
+                break;
+            case HORIZONTAL_VERTICAL:
+                removeHorizontalSeams(numberOfHorizontalSeamsToCarve);
+                removeVerticalSeams(numberOfVerticalSeamsToCarve);
+                break;
+            case INTERMITTENT:
+                while(numberOfVerticalSeamsToCarve-- + numberOfHorizontalSeamsToCarve-- > 0) {
+                    removeHorizontalSeams(1);
+                    removeVerticalSeams(1);
+                    if(numberOfVerticalSeamsToCarve == 0){
+                        removeHorizontalSeams(numberOfHorizontalSeamsToCarve);
+                    }else if(numberOfHorizontalSeamsToCarve == 0){
+                        removeVerticalSeams(numberOfHorizontalSeamsToCarve);
+                    }
+                }
+                break;
+        }
+
+        return this.seamCarvedImage;
+    }
+
+
+
+
+    private void removeVerticalSeams(int numberOfVerticalSeamsToCarve){
+        while(numberOfVerticalSeamsToCarve-- > 0){
+            this.greyScaleMatrix = getGreyScaleMatrix();
+            this.energyMatrix = calculateEnergy();
+            updateCostMatrixVertical();
+            removeOneVerticalSeam();
+        }
+
+    }
+
+    private void removeHorizontalSeams(int numberOfVerticalSeamsToCarve){
+        while(numberOfVerticalSeamsToCarve-- > 0){
+
+        }
+
+    }
+
+
+    public void updateCostMatrixVertical(){
+
+        setForEachParameters(currentWidth,currentHeight);
+        pushForEachParameters();
+        this.costMatrix = new double[currentHeight][currentWidth];
+
+        forEach((height,width) -> {
+            if(height == 0){
+                costMatrix[height][width] = calcEnergy(height,width);
+            }else {
+                double edgeCostUp = EDGE_PENALTY + costMatrix[height][width - 1];
+                if (width == 0) {
+                    double costTopRight = costMatrix[height + 1][width - 1];
+                    double costRight = costTopRight + Math.abs(greyScaleMatrix[height + 1][width] - greyScaleMatrix[height][width - 1]);
+                    if (costRight < edgeCostUp) {
+                        parentMatrix[height][width] = new Coordinate(height + 1, width - 1);
+                        costMatrix[height][width] += costRight;
+                    } else {
+                        parentMatrix[height][width] = new Coordinate(height, width - 1);
+                        costMatrix[height][width] += edgeCostUp;
+                    }
+                }else if(width >= currentWidth - 1) {
+                    double costTopLeft = costMatrix[height - 1][width - 1];
+                    double costLeft = costTopLeft + Math.abs(greyScaleMatrix[height-1][width] - greyScaleMatrix[height][width-1]);
+                    if (costLeft < edgeCostUp) {
+                        parentMatrix[height][width] = new Coordinate(height - 1, width - 1);
+                        costMatrix[height][width] += costLeft;
+                    } else {
+                        parentMatrix[height][width] = new Coordinate(height, width - 1);
+                        costMatrix[height][width] += edgeCostUp;
+                    }
+                }
+                else {
+                    int diffRightLeft = Math.abs(greyScaleMatrix[height+1][width] - greyScaleMatrix[height-1][width]);
+                    int calcDiffLeft = Math.abs(greyScaleMatrix[height-1][width] - greyScaleMatrix[height][width-1]) + diffRightLeft;
+                    int calcDiffRight= Math.abs(greyScaleMatrix[height+1][width] - greyScaleMatrix[height][width-1]) + diffRightLeft;
+
+                    double costLeft = costMatrix[height - 1][width - 1] + calcDiffLeft;
+                    double costRight = costMatrix[height + 1][width - 1] + calcDiffRight;
+                    double costUp = costMatrix[height][width - 1] + diffRightLeft;
+                    boolean upIsMin = costUp < costRight && costUp < costLeft;
+
+                    if(upIsMin){
+                        parentMatrix[height][width] = new Coordinate(height,width-1);
+                        costMatrix[height][width] += costUp;
+                    }else if(costRight < costLeft){
+                        parentMatrix[height][width] = new Coordinate(height+1,width-1);
+                        costMatrix[height][width] += costRight;
+                    }else{
+                        parentMatrix[height][width] = new Coordinate(height-1,width-1);
+                        costMatrix[height][width] += costLeft;
+                    }
+                }
+            }
+        });
+    }
+
+    public int[][] getGreyScaleMatrix(){
+
+        BufferedImage ans = newEmptyImage(currentWidth,currentHeight);
+        setForEachParameters(currentWidth,currentHeight);
+        int[][] tempMatrix = new int[currentHeight][currentWidth];
+        setForEachParameters(currentWidth,currentHeight);
+        pushForEachParameters();
+        forEach((height, width) -> {
+            Color c = new Color(this.seamCarvedImage.getRGB(width,height));
+            tempMatrix[height][width]= CalculateGreyColor(c.getRed(),c.getGreen(),c.getBlue());
+        });
+        popForEachParameters();
+        return  tempMatrix;
+    }
+
+    public int[][] calculateEnergy(){
+        boolean isSeamCarved = true;
+        setForEachParameters(currentWidth,currentHeight);
+        pushForEachParameters();
+        int[][] tempMatrix = new int[currentHeight][currentWidth];
+        forEach((height,width) ->{
+            tempMatrix[height][width] = calcEnergy(height,width);
+        });
+        popForEachParameters();
+        return tempMatrix;
+    }
+
+
+
+    private void removeOneVerticalSeam() {
+        //find the minimum value in the bottom of the cost matrix
+        double minSeamValue = costMatrix[0][currentHeight-1];
+        int minSeamIndex = 0;
+        for (int i = 0; i < currentWidth; i++) {
+            if (costMatrix[i][currentHeight-1] <= minSeamValue) {
+                minSeamIndex = i;
+                minSeamValue = costMatrix[i][currentHeight-1];
+            }
+        }
+
+
+        Coordinate[] seam = new Coordinate[currentHeight];
+        int x = minSeamIndex;
+        seam[currentHeight - 1] = new Coordinate(x, currentHeight - 1);
+        for (int i = currentHeight - 1; i > 0; i--) {
+            x = parentMatrix[x][i].X;
+            seam[i - 1] = new Coordinate(x, i - 1);
+        }
+        //update coordinateMatrix, imagetoCarve
+        this.currentWidth--;
+        BufferedImage newimage = newEmptyImage(currentWidth, currentHeight);
+        for (int i = 0; i < currentHeight; i++) {
+            for (int j = 0; j < currentWidth; j++) {
+                if (j < seam[i].X) {
+                    newimage.setRGB(j, i, seamCarvedImage.getRGB(j, i));
+                } else {
+                    newimage.setRGB(j, i, seamCarvedImage.getRGB(j + 1, i));
+                    currentCoordinates[i][j] = currentCoordinates[i][j + 1];
+                }
+            }
+
+        }
+        this.seamCarvedImage = newimage;
+    }
+
+        private int calcEnergy(int height,int width){
+
+            int diffVertical;
+            int diffHorizontal;
+            int greyColor = greyScaleMatrix[height][width];
+            if (width < greyScaleMatrix[0].length - 1) {
+                diffHorizontal = greyColor - greyScaleMatrix[height][width+1];
+            } else {
+                diffHorizontal = greyColor - greyScaleMatrix[height][width-1];
+            }
+
+            if (height < greyScaleMatrix.length - 1) {
+                diffVertical = greyColor - greyScaleMatrix[height+1][width];
+            } else {
+                diffVertical = greyColor - greyScaleMatrix[height-1][width];
+            }
+
+            int squaredSum = diffVertical * diffVertical + diffHorizontal * diffHorizontal;
+            return (int) Math.sqrt(squaredSum);
+
+        }
+
+    public BufferedImage showSeams(boolean showVerticalSeams, int seamColorRGB) {
+        int numberOfVerticalSeamsToCarve = Math.abs(this.outWidth - this.inWidth);
+        int numberOfHorizontalSeamsToCarve = Math.abs(this.outHeight - this.inHeight);
+        // TODO :  Present either vertical or horizontal seams on the input image.
+        // If showVerticalSeams = true, carve 'numberOfVerticalSeamsToCarve' vertical seams from the image.
+        // Then, generate a new image from the input image in which you mark all of the vertical seams that
+        // were chosen in the Seam Carving process.
+        // This is done by painting each pixel in each seam with 'seamColorRGB' (overriding its' previous value).
+        // Similarly, if showVerticalSeams = false, carve 'numberOfHorizontalSeamsToCarve' horizontal seams
+        // from the image.
+        // Then, generate a new image from the input image in which you mark all of the horizontal seams that
+        // were chosen in the Seam Carving process.
+        throw new UnimplementedMethodException("showSeams");
+    }
 }

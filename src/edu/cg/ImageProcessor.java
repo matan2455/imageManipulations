@@ -95,7 +95,8 @@ public class ImageProcessor extends FunctioalForEachLoops {
 		pushForEachParameters();
 		setForEachOutputParameters();
 		forEach((y, x) -> {
-			int greyColor = CalculateGreyColor(this.workingImage,x,y);
+			Color c = new Color(this.workingImage.getRGB(x,y));
+			int greyColor = CalculateGreyColor(c.getRed(),c.getGreen(),c.getBlue());
 			ans.setRGB(x, y,new Color(greyColor,greyColor,greyColor).getRGB());
 		});
 
@@ -186,16 +187,14 @@ public class ImageProcessor extends FunctioalForEachLoops {
 		return output;
 	}
 
-	public int CalculateGreyColor(BufferedImage imageToGreyScale,int x,int y){
+	public int CalculateGreyColor(int red,int green,int blue){
 
 		int sumWeights = rgbWeights.weightsSum;
+		float redWeighted = rgbWeights.redWeight *red;
+		float greenWeighted = rgbWeights.greenWeight*green;
+		float blueWeighted = rgbWeights.blueWeight*blue;
 
-		Color c = new Color(imageToGreyScale.getRGB(x, y));
-		float red = rgbWeights.redWeight *c.getRed();
-		float green = rgbWeights.greenWeight*c.getGreen();
-		float blue = rgbWeights.blueWeight*c.getBlue();
-
-		return (int)((red + green + blue)/sumWeights);
+		return (int)((redWeighted + greenWeighted + blueWeighted)/sumWeights);
 
 	}
 
@@ -218,8 +217,7 @@ public class ImageProcessor extends FunctioalForEachLoops {
 		}
 
 		int squaredSum = diffVertical * diffVertical + diffHorizontal * diffHorizontal;
-		int result = isSeamCarve? (int) Math.sqrt(squaredSum):MAX_COLOR_VALUE - (int) Math.sqrt(squaredSum / 2.0);
-		return result;
+		return MAX_COLOR_VALUE - (int) Math.sqrt(squaredSum / 2.0);
 	}
 
 	private static class NearestCells {
