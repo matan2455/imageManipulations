@@ -275,7 +275,8 @@ public class BasicSeamsCarver extends ImageProcessor {
 
         BufferedImage carvedImage = newEmptyImage(currentWidth, currentHeight);
         double minSeamValue = costMatrix[currentHeight-1][0];
-        int seamEndPoint = currentWidth-1;
+        Coordinate[] seamToRemove = new Coordinate[currentHeight];
+        int seamEndPoint = 0;
 
         for (int i = 0; i < currentWidth; i++) {
             if (costMatrix[currentHeight-1][i] <= minSeamValue) {
@@ -284,7 +285,6 @@ public class BasicSeamsCarver extends ImageProcessor {
             }
         }
 
-        Coordinate[] seamToRemove = new Coordinate[currentHeight];
         int x = seamEndPoint;
         seamToRemove[currentHeight - 1] = new Coordinate(x, currentHeight - 1);
         for (int i = currentHeight - 1; i > 0; i--) {
@@ -313,7 +313,8 @@ public class BasicSeamsCarver extends ImageProcessor {
 
         BufferedImage carvedImage = newEmptyImage(currentWidth, currentHeight);
         double minSeamValue = costMatrix[0][currentWidth-1];
-        int seamEndPoint = currentWidth-1;
+        Coordinate[] seamToRemove = new Coordinate[currentWidth];
+        int seamEndPoint = 0;
 
         for (int i = 0; i < currentHeight; i++) {
             if (costMatrix[i][currentWidth-1] <= minSeamValue) {
@@ -322,7 +323,6 @@ public class BasicSeamsCarver extends ImageProcessor {
             }
         }
 
-        Coordinate[] seamToRemove = new Coordinate[currentWidth];
         seamToRemove[currentWidth - 1] = new Coordinate(currentWidth-1, seamEndPoint);
         for (int i = currentWidth - 1; i > 0; i--) {
             seamToRemove[i - 1] = new Coordinate(i-1, parentMatrix[seamEndPoint][i].Y);
