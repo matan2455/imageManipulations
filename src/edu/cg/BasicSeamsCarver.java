@@ -71,33 +71,29 @@ public class BasicSeamsCarver extends ImageProcessor {
         int numberOfVerticalSeamsToCarve = Math.abs(this.outWidth - this.inWidth);
         int numberOfHorizontalSeamsToCarve = Math.abs(this.outHeight - this.inHeight);
 
-        switch(carvingScheme){
-            case VERTICAL_HORIZONTAL:
-                removeVerticalSeams(numberOfVerticalSeamsToCarve);
-                removeHorizontalSeams(numberOfHorizontalSeamsToCarve);
-                break;
-            case HORIZONTAL_VERTICAL:
-                removeHorizontalSeams(numberOfHorizontalSeamsToCarve);
-                removeVerticalSeams(numberOfVerticalSeamsToCarve);
-                break;
-            case INTERMITTENT:
-                while(numberOfVerticalSeamsToCarve > 0 || numberOfHorizontalSeamsToCarve > 0) {
-                    if(numberOfVerticalSeamsToCarve > 0){
-                        this.greyScaleMatrix = getGreyScaleMatrix();
-                        this.energyMatrix = calculateEnergy();
-                        updateCostMatrixVertical();
-                        removeOneVerticalSeam();
-                        numberOfVerticalSeamsToCarve--;
-                    }
-                    if(numberOfHorizontalSeamsToCarve > 0){
-                        this.greyScaleMatrix = getGreyScaleMatrix();
-                        this.energyMatrix = calculateEnergy();
-                        updateCostMatrixHorizontal();
-                        removeOneHorizontalSeam();
-                        numberOfHorizontalSeamsToCarve--;
-                    }
+        if(carvingScheme == CarvingScheme.VERTICAL_HORIZONTAL) {
+            removeVerticalSeams(numberOfVerticalSeamsToCarve);
+            removeHorizontalSeams(numberOfHorizontalSeamsToCarve);
+        } else if(carvingScheme == CarvingScheme.HORIZONTAL_VERTICAL) {
+            removeHorizontalSeams(numberOfHorizontalSeamsToCarve);
+            removeVerticalSeams(numberOfVerticalSeamsToCarve);
+        } else {
+            while(numberOfVerticalSeamsToCarve > 0 || numberOfHorizontalSeamsToCarve > 0) {
+                if(numberOfVerticalSeamsToCarve > 0){
+                    this.greyScaleMatrix = getGreyScaleMatrix();
+                    this.energyMatrix = calculateEnergy();
+                    updateCostMatrixVertical();
+                    removeOneVerticalSeam();
+                    numberOfVerticalSeamsToCarve--;
                 }
-                break;
+                if(numberOfHorizontalSeamsToCarve > 0){
+                    this.greyScaleMatrix = getGreyScaleMatrix();
+                    this.energyMatrix = calculateEnergy();
+                    updateCostMatrixHorizontal();
+                    removeOneHorizontalSeam();
+                    numberOfHorizontalSeamsToCarve--;
+                }
+            }
         }
 
         return this.seamCarvedImage;
@@ -145,39 +141,35 @@ public class BasicSeamsCarver extends ImageProcessor {
                         costMatrix[height][width] += edgeCostUp;
                     }
                 }else if(width >= currentWidth - 1) {
-                    double costTopLeft = costMatrix[height - 1][width - 1];
-                    double costLeft = costTopLeft + Math.abs(greyScaleMatrix[height-1][width] - greyScaleMatrix[height][width-1]);
-                    if (costLeft < edgeCostUp) {
-                        parentMatrix[height][width] = new Coordinate(width - 1, height - 1);
-                        costMatrix[height][width] += costLeft;
-                    } else {
-                        parentMatrix[height][width] = new Coordinate(width, height - 1);
-                        costMatrix[height][width] += edgeCostUp;
-                    }
+                    updateCostEdgePixel(width, height, edgeCostUp, height - 1, width - 1, width, height - 1);
                 }
                 else {
-                    int diffRightLeft = Math.abs(greyScaleMatrix[height][width-1] - greyScaleMatrix[height][width+1]);
-                    int calcDiffLeft = Math.abs(greyScaleMatrix[height-1][width] - greyScaleMatrix[height][width-1]) + diffRightLeft;
-                    int calcDiffRight= Math.abs(greyScaleMatrix[height-1][width] - greyScaleMatrix[height][width+1]) + diffRightLeft;
-
-                    double costLeft = costMatrix[height - 1][width - 1] + calcDiffLeft;
-                    double costRight = costMatrix[height - 1][width + 1] + calcDiffRight;
-                    double costUp = costMatrix[height - 1][width] + diffRightLeft;
-                    boolean upIsMin = costUp < costRight && costUp < costLeft;
-
-                    if(upIsMin){
-                        parentMatrix[height][width] = new Coordinate(width, height - 1);
-                        costMatrix[height][width] += costUp;
-                    }else if(costRight < costLeft){
-                        parentMatrix[height][width] = new Coordinate(width + 1, height - 1);
-                        costMatrix[height][width] += costRight;
-                    }else{
-                        parentMatrix[height][width] = new Coordinate(width - 1, height - 1);
-                        costMatrix[height][width] += costLeft;
-                    }
+                    updateVerticalCostMiddlePixel(height, width);
                 }
             }
         });
+    }
+
+    private void updateVerticalCostMiddlePixel(Integer height, Integer width) {
+        int diffRightLeft = Math.abs(greyScaleMatrix[height][width-1] - greyScaleMatrix[height][width+1]);
+        int calcDiffLeft = Math.abs(greyScaleMatrix[height-1][width] - greyScaleMatrix[height][width-1]) + diffRightLeft;
+        int calcDiffRight= Math.abs(greyScaleMatrix[height-1][width] - greyScaleMatrix[height][width+1]) + diffRightLeft;
+
+        double costLeft = costMatrix[height - 1][width - 1] + calcDiffLeft;
+        double costRight = costMatrix[height - 1][width + 1] + calcDiffRight;
+        double costUp = costMatrix[height - 1][width] + diffRightLeft;
+        boolean upIsMin = costUp < costRight && costUp < costLeft;
+
+        if(upIsMin){
+            parentMatrix[height][width] = new Coordinate(width, height - 1);
+            costMatrix[height][width] += costUp;
+        }else if(costRight < costLeft){
+            parentMatrix[height][width] = new Coordinate(width + 1, height - 1);
+            costMatrix[height][width] += costRight;
+        }else{
+            parentMatrix[height][width] = new Coordinate(width - 1, height - 1);
+            costMatrix[height][width] += costLeft;
+        }
     }
 
     public void updateCostMatrixHorizontal(){
@@ -192,49 +184,49 @@ public class BasicSeamsCarver extends ImageProcessor {
             }else {
                 double CostLeft = EDGE_PENALTY + costMatrix[height][width-1];
                 if (height == 0) {
-                    double costDown = costMatrix[height + 1][width - 1];
-                    double costDownLeft = costDown + Math.abs(greyScaleMatrix[height + 1][width] - greyScaleMatrix[height][width - 1]);
-                    if (costDownLeft < CostLeft) {
-                        parentMatrix[height][width] = new Coordinate(width - 1, height + 1);
-                        costMatrix[height][width] += costDownLeft;
-                    } else {
-                        parentMatrix[height][width] = new Coordinate(width-1, height);
-                        costMatrix[height][width] += CostLeft;
-                    }
+                    updateCostEdgePixel(width, height, CostLeft, height + 1, width - 1, width-1, height);
                 }else if(height >= currentHeight - 1) {
-                    double costTop = costMatrix[height - 1][width - 1];
-                    double costTopLeft = costTop + Math.abs(greyScaleMatrix[height-1][width] - greyScaleMatrix[height][width-1]);
-                    if (costTopLeft < CostLeft) {
-                        parentMatrix[height][width] = new Coordinate(width - 1, height - 1);
-                        costMatrix[height][width] += costTopLeft;
-                    } else {
-                        parentMatrix[height][width] = new Coordinate(width-1, height);
-                        costMatrix[height][width] += CostLeft;
-                    }
+                    updateCostEdgePixel(width, height, CostLeft, height - 1, width - 1, width - 1, height);
                 }
                 else {
-                    int diffUpDown = Math.abs(greyScaleMatrix[height-1][width] - greyScaleMatrix[height+1][width]);
-                    int calcDiffTop = Math.abs(greyScaleMatrix[height-1][width] - greyScaleMatrix[height][width-1]) + diffUpDown;
-                    int calcDiffDown = Math.abs(greyScaleMatrix[height + 1][width] - greyScaleMatrix[height][width - 1]) + diffUpDown;
-
-                    double costTop = costMatrix[height - 1][width - 1] + calcDiffTop;
-                    double costDown = costMatrix[height + 1][width - 1] + calcDiffDown;
-                    double costLeft = costMatrix[height][width-1] + diffUpDown;
-                    boolean leftIsMin = costLeft < costDown && costLeft < costTop;
-
-                    if(leftIsMin){
-                        parentMatrix[height][width] = new Coordinate(width-1, height);
-                        costMatrix[height][width] += costLeft;
-                    }else if(costDown < costTop){
-                        parentMatrix[height][width] = new Coordinate(width - 1, height + 1);
-                        costMatrix[height][width] += costDown;
-                    }else{
-                        parentMatrix[height][width] = new Coordinate(width - 1, height - 1);
-                        costMatrix[height][width] += costTop;
-                    }
+                    updateHorizontalCostMiddlePixel(width, height);
                 }
             }
         });
+    }
+
+    private void updateCostEdgePixel(Integer width, Integer height, double costLeft, int i, int i2, int i3, Integer height2) {
+        double costTop = costMatrix[i][i2];
+        double costTopLeft = costTop + Math.abs(greyScaleMatrix[i][width] - greyScaleMatrix[height][i2]);
+        if (costTopLeft < costLeft) {
+            parentMatrix[height][width] = new Coordinate(i2, i);
+            costMatrix[height][width] += costTopLeft;
+        } else {
+            parentMatrix[height][width] = new Coordinate(i3, height2);
+            costMatrix[height][width] += costLeft;
+        }
+    }
+
+    private void updateHorizontalCostMiddlePixel(Integer width, Integer height) {
+        int diffUpDown = Math.abs(greyScaleMatrix[height -1][width] - greyScaleMatrix[height +1][width]);
+        int calcDiffTop = Math.abs(greyScaleMatrix[height -1][width] - greyScaleMatrix[height][width -1]) + diffUpDown;
+        int calcDiffDown = Math.abs(greyScaleMatrix[height + 1][width] - greyScaleMatrix[height][width - 1]) + diffUpDown;
+
+        double costTop = costMatrix[height - 1][width - 1] + calcDiffTop;
+        double costDown = costMatrix[height + 1][width - 1] + calcDiffDown;
+        double costLeft = costMatrix[height][width -1] + diffUpDown;
+        boolean leftIsMin = costLeft < costDown && costLeft < costTop;
+
+        if(leftIsMin){
+            parentMatrix[height][width] = new Coordinate(width -1, height);
+            costMatrix[height][width] += costLeft;
+        }else if(costDown < costTop){
+            parentMatrix[height][width] = new Coordinate(width - 1, height + 1);
+            costMatrix[height][width] += costDown;
+        }else{
+            parentMatrix[height][width] = new Coordinate(width - 1, height - 1);
+            costMatrix[height][width] += costTop;
+        }
     }
 
     public int[][] getGreyScaleMatrix(){
@@ -267,76 +259,101 @@ public class BasicSeamsCarver extends ImageProcessor {
 
     private void removeOneVerticalSeam() {
 
-        double minSeamValue = costMatrix[currentHeight-1][0];
-        int seamEndPoint = 0;
-        for (int i = 0; i < currentWidth; i++) {
-            if (costMatrix[currentHeight-1][i] <= minSeamValue) {
-                seamEndPoint = i;
-                minSeamValue = costMatrix[currentHeight-1][i];
-            }
-        }
-
-
-        Coordinate[] seam = new Coordinate[currentHeight];
-        int x = seamEndPoint;
-        seam[currentHeight - 1] = new Coordinate(x, currentHeight - 1);
-        for (int i = currentHeight - 1; i > 0; i--) {
-            x = parentMatrix[i][x].X;
-            seam[i - 1] = new Coordinate(x, i - 1);
-        }
-
+        int seamEndPoint = getSeamEndPointVertical();
+        Coordinate[] seam = getSeamForStorageVertical(seamEndPoint);
         this.currentWidth--;
+        BufferedImage newimage = createNewCarvedImageVertical(seam);
+        seamCarvedImage = newimage;
+        verticalRemovedSeams.add(seam);
+    }
+
+    private BufferedImage createNewCarvedImageVertical(Coordinate[] seam) {
         BufferedImage newimage = newEmptyImage(currentWidth, currentHeight);
-        for (int i = 0; i < currentHeight; i++) {
-            for (int j = 0; j < currentWidth; j++) {
-                if (j < seam[i].X) {
-                    newimage.setRGB(j, i, seamCarvedImage.getRGB(j, i));
+        for (int height = 0; height < currentHeight; height++) {
+            for (int width = 0; width < currentWidth; width++) {
+                if (width < seam[height].X) {
+                    newimage.setRGB(width, height, seamCarvedImage.getRGB(width, height));
                 } else {
-                    newimage.setRGB(j, i, seamCarvedImage.getRGB(j + 1, i));
-                    currentCoordinates[i][j] = currentCoordinates[i][j + 1];
+                    newimage.setRGB(width, height, seamCarvedImage.getRGB(width + 1, height));
+                    currentCoordinates[height][width] = currentCoordinates[height][width + 1];
                 }
             }
         }
+        return newimage;
+    }
 
-        verticalRemovedSeams.add(seam);
-        this.seamCarvedImage = newimage;
+
+    private Coordinate[] getSeamForStorageVertical(int seamEndPoint) {
+        Coordinate[] seam = new Coordinate[currentHeight];
+        int width = seamEndPoint;
+        seam[currentHeight - 1] = new Coordinate(width, currentHeight - 1);
+        for (int height = currentHeight - 1; height > 0; height--) {
+            width = parentMatrix[height][width].X;
+            seam[height - 1] = new Coordinate(width, height - 1);
+        }
+        return seam;
+    }
+
+    private int getSeamEndPointVertical() {
+        double minSeamValue = costMatrix[currentHeight-1][0];
+        int seamEndPoint = 0;
+        for (int width = 0; width < currentWidth; width++) {
+            if (costMatrix[currentHeight-1][width] <= minSeamValue) {
+                seamEndPoint = width;
+                minSeamValue = costMatrix[currentHeight-1][width];
+            }
+        }
+        return seamEndPoint;
     }
 
 
     private void removeOneHorizontalSeam() {
 
-        double minSeamValue = costMatrix[0][currentWidth-1];
-        int seamEndPoint = 0;
-        for (int i = 0; i < currentHeight; i++) {
-            if (costMatrix[i][currentWidth-1] <= minSeamValue) {
-                seamEndPoint = i;
-                minSeamValue = costMatrix[i][currentWidth-1];
-            }
-        }
-
-        Coordinate[] seam = new Coordinate[currentWidth];
-        int y = seamEndPoint;
-        seam[currentWidth - 1] = new Coordinate(currentWidth-1, y);
-        for (int i = currentWidth - 1; i > 0; i--) {
-            y = parentMatrix[y][i].Y;
-            seam[i - 1] = new Coordinate(i-1, y);
-        }
-
+        int seamEndPoint = getSeamEndPointHorizontal();
         this.currentHeight--;
         BufferedImage newimage = newEmptyImage(currentWidth, currentHeight);
-        for (int i = 0; i < currentWidth; i++) {
-            for (int j = 0; j < currentHeight; j++) {
-                if (j < seam[i].Y) {
-                    newimage.setRGB(i, j, seamCarvedImage.getRGB(i, j));
+        Coordinate[] seam = getSeamHorizontal(seamEndPoint);
+        updateImageHorizontal(newimage, seam);
+
+        horizontalRemovedSeams.add(seam);
+
+    }
+
+    private void updateImageHorizontal(BufferedImage newimage, Coordinate[] seam) {
+        for (int width = 0; width < currentWidth; width++) {
+            for (int height = 0; height < currentHeight; height++) {
+                if (height < seam[width].Y) {
+                    newimage.setRGB(width, height, seamCarvedImage.getRGB(width, height));
                 } else {
-                    newimage.setRGB(i, j, seamCarvedImage.getRGB(i, j+1));
-                    currentCoordinates[j][i] = currentCoordinates[j+1][i];
+                    currentCoordinates[height][width] = currentCoordinates[height+1][width];
+                    newimage.setRGB(width, height, seamCarvedImage.getRGB(width, height+1));
                 }
             }
         }
-
-        horizontalRemovedSeams.add(seam);
         this.seamCarvedImage = newimage;
+    }
+
+    private int getSeamEndPointHorizontal() {
+        double minSeamValue = costMatrix[0][currentWidth-1];
+        int seamEndPoint = 0;
+        for (int height = 0; height < currentHeight; height++) {
+            if (costMatrix[height][currentWidth-1] < minSeamValue) {
+                minSeamValue = costMatrix[height][currentWidth-1];
+                seamEndPoint = height;
+            }
+        }
+        return seamEndPoint;
+    }
+
+    private Coordinate[] getSeamHorizontal(int seamEndPoint) {
+        Coordinate[] seam = new Coordinate[currentWidth];
+        int height = seamEndPoint;
+        seam[currentWidth - 1] = new Coordinate(currentWidth-1, height);
+        for (int width = currentWidth - 1; width > 0; width--) {
+            height = parentMatrix[height][width].Y;
+            seam[width - 1] = new Coordinate(width-1, height);
+        }
+        return seam;
     }
 
     private int calcEnergy(int height,int width){
